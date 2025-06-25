@@ -83,7 +83,7 @@ async function main() {
   console.log(`Rendering video to ${outputVideo}`);
   const result = spawnSync(
     'npx',
-    ['remotion', 'render', 'src/index.ts', 'CaptionedVideo', outputVideo, '--props', JSON.stringify(props)],
+    ['remotion', 'render', 'remotion_src/index.ts', 'CaptionedVideo', outputVideo, '--props', JSON.stringify(props)],
     { stdio: 'inherit' },
   );
   if (result.error) {

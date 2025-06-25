@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { AbsoluteFill, Sequence, useVideoConfig, Audio } from "remotion";
 import { Caption, createTikTokStyleCaptions } from "@remotion/captions";
-import SubtitlePage from "./CaptionedVideo/SubtitlePage";
+import SubtitlePage from "./SubtitlePage";
 
 export const SWITCH_CAPTIONS_EVERY_MS = 200;
 

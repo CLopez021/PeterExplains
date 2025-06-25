@@ -15,6 +15,7 @@ export const RemotionRoot: React.FC = () => {
       width={1080}
       height={1920}
       defaultProps={{
+        segments: [],
         src: staticFile("sample-video.mp4"),
         captions: [],
       }}

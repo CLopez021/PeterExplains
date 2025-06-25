@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 import {parseMedia} from '@remotion/media-parser';
 import { Caption } from "@remotion/captions";
-import CaptionOverlay, { SWITCH_CAPTIONS_EVERY_MS } from "../CaptionOverlay";
+import CaptionOverlay, { SWITCH_CAPTIONS_EVERY_MS } from "./CaptionOverlay";
 import { staticFile } from "remotion";
 
 export const captionedVideoSchema = z.object({
