@@ -11,16 +11,22 @@ import {
   transcribe,
   toCaptions,
 } from '@remotion/install-whisper-cpp';
-import { WHISPER_PATH, WHISPER_VERSION, WHISPER_MODEL, WHISPER_LANG } from './whisper-config.mjs';
+// @ts-expect-error no type declarations for whisper-config.mjs
+import { WHISPER_PATH, WHISPER_VERSION, WHISPER_MODEL, WHISPER_LANG } from '../whisper-config.mjs';
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.length < 1) {
-    console.error('Usage: transcribe-and-render.mjs <audioFile> [outputVideo]');
+  if (args.length < 4) {
+    console.error('Usage: main.ts <audioFile> <outputVideo> <stewieImage> <peterImage> [backgroundVideo]');
     process.exit(1);
   }
-  const audioFile = args[0];
-  const outputVideo = args[1] || 'out/video.mp4';
+  const [
+    audioFile,
+    outputVideo = 'out/video.mp4',
+    stewieImage,
+    peterImage,
+    backgroundVideo,
+  ] = args;
 
   // Install whisper.cpp and download the model
   await installWhisperCpp({ to: WHISPER_PATH, version: WHISPER_VERSION });
