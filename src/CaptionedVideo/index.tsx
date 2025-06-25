@@ -1,15 +1,16 @@
-import { useMemo } from "react";
 import {
   AbsoluteFill,
   CalculateMetadataFunction,
   OffthreadVideo,
   Sequence,
+  Audio,
   useVideoConfig,
 } from "remotion";
 import { z } from "zod";
-import SubtitlePage from "./SubtitlePage";
-import { getVideoMetadata } from "@remotion/media-utils";
-import { Caption, createTikTokStyleCaptions } from "@remotion/captions";
+import {parseMedia} from '@remotion/media-parser';
+import { Caption } from "@remotion/captions";
+import CaptionOverlay, { SWITCH_CAPTIONS_EVERY_MS } from "../CaptionOverlay";
+import { staticFile } from "remotion";
 
 export const captionedVideoSchema = z.object({
   src: z.string(),
@@ -22,64 +23,50 @@ export const captionedVideoSchema = z.object({
       confidence: z.number().optional(),
     }),
   ),
+  segments: z.array(
+    z.object({
+      startMs: z.number(),
+      endMs: z.number(),
+    }),
+  ),
 });
 
 export const calculateCaptionedVideoMetadata: CalculateMetadataFunction<
   z.infer<typeof captionedVideoSchema>
 > = async ({ props }) => {
   const fps = 30;
-  const metadata = await getVideoMetadata(props.src);
+  const metadata = await parseMedia({src: props.src, fields: {durationInSeconds: true}});
 
   return {
     fps,
-    durationInFrames: Math.floor(metadata.durationInSeconds * fps),
+    durationInFrames: Math.floor((metadata.durationInSeconds ?? 0) * fps),
   };
 };
-
-const SWITCH_CAPTIONS_EVERY_MS = 1200;
 
 export const CaptionedVideo: React.FC<{
   src: string;
   captions: Caption[];
-}> = ({ src, captions }) => {
+  segments: { startMs: number; endMs: number }[];
+}> = ({ src, captions, segments }) => {
   const { fps } = useVideoConfig();
-
-  const { pages } = useMemo(() => {
-    return createTikTokStyleCaptions({
-      combineTokensWithinMilliseconds: SWITCH_CAPTIONS_EVERY_MS,
-      captions: captions ?? [],
-    });
-  }, [captions]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "white" }}>
       <AbsoluteFill>
-        <OffthreadVideo
-          style={{
-            objectFit: "cover",
-          }}
-          src={src}
-        />
+        <OffthreadVideo style={{ objectFit: "cover" }} src={staticFile("sample-video.mp4")} />
       </AbsoluteFill>
-      {pages.map((page, index) => {
-        const nextPage = pages[index + 1] ?? null;
-        const subtitleStartFrame = (page.startMs / 1000) * fps;
-        const subtitleEndFrame = Math.min(
-          nextPage ? (nextPage.startMs / 1000) * fps : Infinity,
-          subtitleStartFrame + SWITCH_CAPTIONS_EVERY_MS,
-        );
-        const durationInFrames = subtitleEndFrame - subtitleStartFrame;
-        if (durationInFrames <= 0) {
-          return null;
-        }
-
+      <CaptionOverlay
+        audioFile={src}
+        captions={captions}
+        combineTokensWithinMilliseconds={SWITCH_CAPTIONS_EVERY_MS}
+      />
+      {/* Render audio in segments excluding 'fart' words */}
+      {segments.map((seg, i) => {
+        const fromFrame = Math.round((seg.startMs / 1000) * fps);
+        const durationFrames = Math.round(((seg.endMs - seg.startMs) / 1000) * fps);
         return (
-          <Sequence
-            key={index}
-            from={subtitleStartFrame}
-            durationInFrames={durationInFrames}
-          >
-            <SubtitlePage key={index} page={page} />;
+          <Sequence key={i} from={fromFrame} durationInFrames={durationFrames}>
+            <Audio src={src} trimBefore={seg.startMs / 1000} trimAfter={seg.endMs / 1000} />
           </Sequence>
         );
       })}

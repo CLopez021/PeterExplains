@@ -78,6 +78,20 @@ We provide help on our [Discord server](https://remotion.dev/discord).
 
 Found an issue with Remotion? [File an issue here](https://github.com/remotion-dev/remotion/issues/new).
 
+## Google Custom Search Image API
+
+1. Create/Select a Google Cloud project (enable billing if required).
+2. Enable the **Custom Search API** in Cloud Console under **APIs & Services ▶ Library**.
+3. Create an **API key** in **APIs & Services ▶ Credentials** and set `GOOGLE_API_KEY` in your environment.
+4. Create a Custom Search Engine at https://cse.google.com/cse/, enable **Image search**, and set `SEARCH_ENGINE_ID` in your environment.
+
+### Example .env
+
+```env
+GOOGLE_API_KEY=YOUR_API_KEY
+SEARCH_ENGINE_ID=YOUR_SEARCH_ENGINE_ID
+```
+
 ## License
 
 Note that for some entities a company license is needed. [Read the terms here](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md).

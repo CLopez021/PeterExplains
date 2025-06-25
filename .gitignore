@@ -7,3 +7,4 @@ dist
 out
 whisper.cpp
 output/
+public/src_audio/
