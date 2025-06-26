@@ -357,7 +357,7 @@
       statusIndicator.className = 'status-indicator status-pending';
       
       logsEl.style.display = 'block';
-      logsEl.value = 'Starting render process...\n';
+      logsEl.value = `[${new Date().toLocaleTimeString()}] Starting render process...\n`;
 
       const btn = this;
       const formData = new FormData();
@@ -389,13 +389,25 @@
         formData.append('backgroundVideo', bgInputEl.files[0]);
       }
 
+      // Add timeout to catch hanging requests
+      const timeoutId = setTimeout(() => {
+        logsEl.value += `[${new Date().toLocaleTimeString()}] Request timeout - server may not be responding\n`;
+      }, 30000); // 30 second timeout warning
+
       fetch('/render', {
         method: 'POST',
         body: formData,
       })
-        .then((res) => res.json())
+        .then((res) => {
+          clearTimeout(timeoutId);
+          logsEl.value += `[${new Date().toLocaleTimeString()}] Server responded with status: ${res.status}\n`;
+          return res.json();
+        })
         .then((data) => {
+          logsEl.value += `[${new Date().toLocaleTimeString()}] Response received\n`;
           logsEl.value += data.logs;
+          logsEl.scrollTop = logsEl.scrollHeight; // Auto-scroll to bottom
+          
           if (data.success) {
             renderText.textContent = 'Render Complete';
             statusIndicator.className = 'status-indicator status-ready';
@@ -403,15 +415,20 @@
             const outputPreview = document.getElementById('outputPreview');
             outputPreview.src = data.videoUrl;
             outputContainer.style.display = 'block';
+            logsEl.value += `[${new Date().toLocaleTimeString()}] ✅ Video ready: ${data.videoUrl}\n`;
           } else {
             renderText.textContent = 'Render Failed';
             statusIndicator.className = 'status-indicator status-error';
+            logsEl.value += `[${new Date().toLocaleTimeString()}] ❌ Render failed\n`;
             alert('Render failed. Check logs for details.');
           }
         })
         .catch((err) => {
-          logsEl.value += `Error: ${err}\n`;
-          renderText.textContent = 'Render Error';
+          clearTimeout(timeoutId);
+          const errorMsg = `[${new Date().toLocaleTimeString()}] ❌ Network Error: ${err.message}\n`;
+          logsEl.value += errorMsg;
+          console.error('Render request failed:', err);
+          renderText.textContent = 'Network Error';
           statusIndicator.className = 'status-indicator status-error';
         })
         .finally(() => {

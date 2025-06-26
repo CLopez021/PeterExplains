@@ -42,7 +42,7 @@ export const calculateCaptionedVideoMetadata: CalculateMetadataFunction<
   z.infer<typeof captionedVideoSchema>
 > = async ({ props }) => {
   const fps = 30;
-  const metadata = await parseMedia({src: props.src, fields: {durationInSeconds: true}});
+  const metadata = await parseMedia({src: staticFile(props.src), fields: {durationInSeconds: true}});
 
   return {
     fps,
@@ -123,7 +123,7 @@ export const CaptionedVideo: React.FC<{
           from={fromFrame}
           durationInFrames={durationInFrames}
         >
-          <Audio src={src} trimBefore={msToFrames(seg.startMs, fps)} trimAfter={msToFrames(seg.endMs, fps)} />
+          <Audio src={staticFile(src)} trimBefore={msToFrames(seg.startMs, fps)} trimAfter={msToFrames(seg.endMs, fps)} />
         </Sequence>,
       );
     }
@@ -147,7 +147,7 @@ export const CaptionedVideo: React.FC<{
       </AbsoluteFill>
       {characterSequences}
       <CaptionOverlay
-        audioFile={src}
+        audioFile={staticFile(src)}
         captions={captions}
         combineTokensWithinMilliseconds={SWITCH_CAPTIONS_EVERY_MS}
       />

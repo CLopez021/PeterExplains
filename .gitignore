@@ -9,3 +9,5 @@ whisper.cpp
 output/
 public/src_audio/
 public/characters/
+public/uploads/
+public/outputs/
