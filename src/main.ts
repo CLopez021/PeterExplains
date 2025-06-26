@@ -15,6 +15,7 @@ import {
 import { WHISPER_PATH, WHISPER_VERSION, WHISPER_MODEL, WHISPER_LANG } from '../whisper-config.mjs';
 
 async function main() {
+  console.log('Starting main script...');
   const args = process.argv.slice(2);
   if (args.length < 4) {
     console.error('Usage: main.ts <audioFile> <outputVideo> <stewieImage> <peterImage> [backgroundVideo]');
@@ -27,9 +28,12 @@ async function main() {
     peterImage,
     backgroundVideo,
   ] = args;
+  console.log('Arguments received:', { audioFile, outputVideo, stewieImage, peterImage, backgroundVideo });
 
   // Install whisper.cpp and download the model
+  console.log('Installing whisper.cpp...');
   await installWhisperCpp({ to: WHISPER_PATH, version: WHISPER_VERSION });
+  console.log('Downloading whisper model...');
   await downloadWhisperModel({ folder: WHISPER_PATH, model: WHISPER_MODEL });
 
   let tempDir;
@@ -64,9 +68,11 @@ async function main() {
     language: WHISPER_LANG,
     splitOnWord: true,
   });
-  console.log(`whisperOutput: ${JSON.stringify(whisperOutput.transcription)}`);
+  console.log('Transcription complete.');
+  // console.log(`whisperOutput: ${JSON.stringify(whisperOutput.transcription)}`);
   // console.log(`whisperOutput: ${JSON.stringify(whisperOutput)["result"]["transcription"]}`);
   const { captions } = toCaptions({ whisperCppOutput: whisperOutput });
+  console.log('Captions generated.');
   // Preprocess segments around END_WORD in captions using a simple loop
   const END_WORD = 'fart';
   const segments = [];
@@ -82,11 +88,11 @@ async function main() {
   // Push final segment
   segments.push({ startMs: segmentStart, endMs: videoEndMs });
   // Fart captions
-  const fartCaptions = captions.filter((c) => c.text.toLowerCase() === END_WORD);
-  const props = { src: audioFile, captions, segments, fartCaptions };
+  const props = { src: audioFile, captions, segments, stewieImage, peterImage, backgroundVideo };
+  console.log('Prepared props for Remotion.');
 
   // Render video using remotion CLI
-  console.log(`Rendering video to ${outputVideo}`);
+  console.log(`Rendering video to ${outputVideo}...`);
   const result = spawnSync(
     'npx',
     ['remotion', 'render', 'remotion_src/index.ts', 'CaptionedVideo', outputVideo, '--props', JSON.stringify(props)],
@@ -96,11 +102,12 @@ async function main() {
     console.error('Error during rendering:', result.error);
     process.exit(1);
   }
+  console.log('Video rendering finished.');
 
   if (inputForWhisper !== audioFile) {
     try {
       fs.unlinkSync(inputForWhisper);
-      fs.rmdirSync(tempDir);
+      fs.rmdirSync(tempDir!);
       console.log(`Cleaned up temporary files in ${tempDir}`);
     } catch (err) {
       console.warn(`Failed to clean up temporary files: ${err}`);
@@ -111,4 +118,5 @@ async function main() {
 main().catch((err) => {
   console.error(err);
   process.exit(1);
-}); 
+});
+console.log('Main script finished.'); 

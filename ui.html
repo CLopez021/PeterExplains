@@ -347,7 +347,7 @@
     });
 
     // Render button handler
-    document.getElementById('renderBtn').addEventListener('click', function() {
+    document.getElementById('renderBtn').addEventListener('click', async function() {
       const renderText = document.getElementById('renderText');
       const statusIndicator = document.getElementById('statusIndicator');
       const logsEl = document.getElementById('logs');
@@ -359,18 +359,67 @@
       logsEl.style.display = 'block';
       logsEl.value = 'Starting render process...\n';
 
-      // TODO: Implement backend call to /render
-      // Example stub: simulate render
-      setTimeout(() => {
-        logsEl.value += 'Render process completed!\n';
-        renderText.textContent = 'Render Complete';
-        statusIndicator.className = 'status-indicator status-ready';
-        
-        alert('Render not implemented yet.');
-        
-        this.disabled = false;
-        renderText.textContent = 'Start Rendering';
-      }, 2000);
+      const btn = this;
+      const formData = new FormData();
+
+      // Audio must be selected
+      const audioInputEl = document.getElementById('audioInput');
+      if (!audioInputEl.files[0]) {
+        alert('Please select an audio file');
+        btn.disabled = false;
+        return;
+      }
+      formData.append('audioFile', audioInputEl.files[0]);
+
+      // Stewie image (optional)
+      const stewieInputEl = document.getElementById('stewieInput');
+      if (stewieInputEl.files[0]) {
+        formData.append('stewieImage', stewieInputEl.files[0]);
+      }
+
+      // Peter image (optional)
+      const peterInputEl = document.getElementById('peterInput');
+      if (peterInputEl.files[0]) {
+        formData.append('peterImage', peterInputEl.files[0]);
+      }
+
+      // Background video (optional)
+      const bgInputEl = document.getElementById('bgInput');
+      if (bgInputEl.files[0]) {
+        formData.append('backgroundVideo', bgInputEl.files[0]);
+      }
+
+      fetch('/render', {
+        method: 'POST',
+        body: formData,
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          logsEl.value += data.logs;
+          if (data.success) {
+            renderText.textContent = 'Render Complete';
+            statusIndicator.className = 'status-indicator status-ready';
+            const outputContainer = document.getElementById('outputContainer');
+            const outputPreview = document.getElementById('outputPreview');
+            outputPreview.src = data.videoUrl;
+            outputContainer.style.display = 'block';
+          } else {
+            renderText.textContent = 'Render Failed';
+            statusIndicator.className = 'status-indicator status-error';
+            alert('Render failed. Check logs for details.');
+          }
+        })
+        .catch((err) => {
+          logsEl.value += `Error: ${err}\n`;
+          renderText.textContent = 'Render Error';
+          statusIndicator.className = 'status-indicator status-error';
+        })
+        .finally(() => {
+          btn.disabled = false;
+          if (renderText.textContent !== 'Render Complete') {
+            renderText.textContent = 'Start Rendering';
+          }
+        });
     });
 
     // Auto-play background video on load

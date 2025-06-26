@@ -1,14 +1,18 @@
-import { getLlama } from "node-llama-cpp";
-import path from "path";
-import fs from "fs";
+import OpenAI from "openai";
 
-const modelPath =
-  process.env.LLM_MODEL_PATH || path.join(process.cwd(), "models", "model.gguf");
+const openai = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY!,
+});
 
-if (!fs.existsSync(modelPath)) throw new Error(`Model not found: ${modelPath}`);
-
+/**
+ * Generates a chat completion via OpenRouter.
+ */
 export async function generate(prompt: string): Promise<string> {
-  const llama   = await getLlama({ modelPath });
-  const session = await llama.createChatSession();
-  return await session.prompt(prompt);
+  const model = process.env.LLM_MODEL!;
+  const response = await openai.chat.completions.create({
+    model,
+    messages: [{ role: "user", content: prompt }],
+  });
+  return response.choices[0].message.content ?? "";
 }

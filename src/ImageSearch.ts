@@ -1,5 +1,3 @@
-import path from "path";
-import fs from "fs";
 import https from "https";
 import { URL } from "url";
 
@@ -124,25 +122,6 @@ export async function getImages(transcript: string): Promise<ImageSearchResult[]
       return { start: term.start, end: term.end ?? null, image_url };
     })
   );
-}
-
-/* --------------------------------------------------------------------------
- * Example usage (remove or adapt in production)
- * ------------------------------------------------------------------------*/
-if (require.main === module) {
-  (async () => {
-    const transcriptPath = process.argv[2];
-    if (!transcriptPath) {
-      console.error("Usage: ts-node imageQueryGenerator.ts <transcript.txt>");
-      process.exit(1);
-    }
-    const transcript = fs.readFileSync(path.resolve(transcriptPath), "utf8");
-    const terms = await getImageSearchTerms(transcript);
-    console.log(JSON.stringify(terms, null, 2));
-  })().catch((e) => {
-    console.error(e);
-    process.exit(1);
-  });
 }
 
 

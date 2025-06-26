@@ -7,7 +7,7 @@
     "build": "remotion bundle",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc",
-    "create-subtitles": "node sub.mjs"
+    "start": "node server.js"
   },
   "repository": {},
   "license": "UNLICENSED",
@@ -17,7 +17,9 @@
     "@remotion/layout-utils": "^4.0.0",
     "@remotion/media-utils": "^4.0.0",
     "@remotion/zod-types": "^4.0.0",
-    "node-llama-cpp": "^3.10.0",
+    "express": "^5.1.0",
+    "multer": "^2.0.1",
+    "openai": "^5.7.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "remotion": "^4.0.0",
@@ -34,5 +36,6 @@
     "prettier": "3.3.3",
     "typescript": "5.8.2"
   },
-  "private": true
+  "private": true,
+  "type": "module"
 }
