@@ -58,9 +58,10 @@ function buildPrompt(transcript: string): string {
 export async function getImageSearchTerms(transcript: string): Promise<ImageSearch[]> {
   const prompt = buildPrompt(transcript);
   const raw    = await generate(prompt);
-
+  console.log("raw", raw);
   try {
     const parsed = JSON.parse(raw);
+    console.log("parsed", parsed);
     // Basic validation — ensure every item has the required keys.
     if (!Array.isArray(parsed)) throw new Error("Model did not return an array");
     parsed.forEach((item, i) => {

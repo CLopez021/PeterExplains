@@ -7,6 +7,8 @@ type CharacterOverlayProps = {
   side: 'Left' | 'Right';
 };
 
+const heightPlacement = 0.75;
+
 const CharacterOverlay: React.FC<CharacterOverlayProps> = ({ src, side }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -35,7 +37,7 @@ const CharacterOverlay: React.FC<CharacterOverlayProps> = ({ src, side }) => {
       src={src}
       style={{
         position: 'absolute',
-        top: height * 0.35,
+        top: height * heightPlacement,
         left: 0,
         transform: makeTransform([xTransform]),
         width: imgWidth,

@@ -389,10 +389,10 @@
         formData.append('backgroundVideo', bgInputEl.files[0]);
       }
 
-      // Add timeout to catch hanging requests
+      // Add timeout message for longer render times
       const timeoutId = setTimeout(() => {
-        logsEl.value += `[${new Date().toLocaleTimeString()}] Request timeout - server may not be responding\n`;
-      }, 30000); // 30 second timeout warning
+        logsEl.value += `[${new Date().toLocaleTimeString()}] Render is taking longer than expected, please wait...\n`;
+      }, 30000); // 30 second notice for longer renders
 
       fetch('/render', {
         method: 'POST',

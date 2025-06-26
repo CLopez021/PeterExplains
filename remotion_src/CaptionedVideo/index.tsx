@@ -13,7 +13,7 @@ import { Caption } from "@remotion/captions";
 import CaptionOverlay, { SWITCH_CAPTIONS_EVERY_MS } from "./CaptionOverlay";
 import { staticFile } from "remotion";
 import CharacterOverlay from '../CharacterOverlay';
-import { useMemo, useState, useEffect } from "react";
+import { useMemo } from "react";
 import { msToFrames } from "../utils";
 
 export const captionedVideoSchema = z.object({
@@ -42,11 +42,17 @@ export const calculateCaptionedVideoMetadata: CalculateMetadataFunction<
   z.infer<typeof captionedVideoSchema>
 > = async ({ props }) => {
   const fps = 30;
+
   const metadata = await parseMedia({src: staticFile(props.src), fields: {durationInSeconds: true}});
+  const backgroundVideoMetadata = await parseMedia({
+    src: staticFile(props.backgroundVideo),
+    fields: { durationInSeconds: true },
+  });
 
   return {
     fps,
     durationInFrames: Math.floor((metadata.durationInSeconds ?? 0) * fps),
+    props: { ...props, backgroundVideoDurationMs: (backgroundVideoMetadata.durationInSeconds ?? 0) * 1000 },
   };
 };
 
@@ -57,47 +63,31 @@ export const CaptionedVideo: React.FC<{
   stewieImage: string;
   peterImage: string;
   backgroundVideo: string;
-}> = ({ src, captions, segments, stewieImage, peterImage, backgroundVideo }) => {
+  backgroundVideoDurationMs: number;
+}> = ({ src, captions, segments, stewieImage, peterImage, backgroundVideo, backgroundVideoDurationMs }) => {
   const { fps } = useVideoConfig();
-	const [backgroundVideoDurationMs, setBackgroundVideoDurationMs] = useState(0);
-
-	useEffect(() => {
-    const getDuration = async () => {
-      const meta = await parseMedia({
-        src: staticFile(backgroundVideo),
-        fields: { durationInSeconds: true },
-      });
-      setBackgroundVideoDurationMs(meta.durationInSeconds ?? 0 * 1000);
-    };
-    getDuration();
-  }, [backgroundVideo]);
 
 	const { videoStartFrame, videoEndFrame } = useMemo(() => {
-    if (backgroundVideoDurationMs === 0 || segments.length === 0) {
-      return { videoStartFrame: 0, videoEndFrame: undefined };
-    }
-
-    const lastSegment = segments[segments.length - 1];
-    if (!lastSegment) {
+    const backgroundDurationInFrames = msToFrames(backgroundVideoDurationMs, fps);
+    // Before knowing duration, play from start
+    if (backgroundDurationInFrames === 0) {
+      throw new Error("Background video duration is 0");
       return { videoStartFrame: 0, videoEndFrame: 0 };
     }
 
-    const contentDuration = lastSegment.endMs;
+    const contentDuration = captions[captions.length - 1].endMs;
     const paddedContentDurationMs = contentDuration + 2000;
     const paddedContentDurationInFrames = msToFrames(paddedContentDurationMs, fps);
-
-    const backgroundDurationInFrames = msToFrames(backgroundVideoDurationMs, fps);
 
     if (paddedContentDurationInFrames >= backgroundDurationInFrames) {
       return { videoStartFrame: 0, videoEndFrame: backgroundDurationInFrames };
     }
-
-    // const maxStartFrame = backgroundDurationInFrames - paddedContentDurationInFrames;
-    const startFrame =msToFrames(random(backgroundVideoDurationMs-paddedContentDurationMs), fps);
+    const maxStartFrame = backgroundDurationInFrames - paddedContentDurationInFrames;
+    const startFrame = Math.floor(random(maxStartFrame) * maxStartFrame);
     const endFrame = startFrame + paddedContentDurationInFrames;
-
+    console.error("startFrame, endFrame", startFrame, endFrame);
     return { videoStartFrame: startFrame, videoEndFrame: endFrame };
-  }, [backgroundVideoDurationMs, segments, fps]);
+  }, [backgroundVideoDurationMs, segments, fps, captions]);
 
   const { characterSequences, audioSequences } = useMemo(() => {
     const characterSequences: React.ReactNode[] = [];

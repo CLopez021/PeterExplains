@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 3000;
 
 
 // Ensure uploads and outputs directories exist
-[uploadDest, path.join(__dirname, 'outputs')].forEach((dir) => {
+[uploadDest, path.join(__dirname, 'public', 'outputs')].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir);
   }
@@ -26,7 +26,7 @@ const PORT = process.env.PORT || 3000;
 // Serve static files (UI and assets)
 app.use(express.static(path.join(__dirname)));
 // Serve output videos
-app.use('/outputs', express.static(path.join(__dirname, 'outputs')));
+app.use('/outputs', express.static(path.join(__dirname, 'public', 'outputs')));
 
 // Serve UI at root
 app.get('/', (req, res) => {
@@ -71,7 +71,7 @@ app.post('/render', upload.fields([
   console.log('Using files:', { audioFilePath, stewieImagePath, peterImagePath, backgroundVideoPath });
 
   const outputFileName = `output_${Date.now()}.mp4`;
-  const outputPath = path.join('outputs', outputFileName);
+  const outputPath = path.join('public', 'outputs', outputFileName);
 
   // Spawn the main.ts script via ts-node
   const args = [
@@ -126,21 +126,6 @@ app.post('/render', upload.fields([
     console.log(`Exit code: ${code}`);
     console.log(`Total logs length: ${logs.length} characters`);
     
-    // Cleanup uploaded files (main.ts will handle the uploads folder cleanup)
-    console.log('=== CLEANING UP FILES ===');
-    [audioFilePath, stewieImagePath, peterImagePath, backgroundVideoPath].forEach((filePath) => {
-      if (filePath && filePath.startsWith(uploadDest)) {
-        try {
-          fs.unlinkSync(filePath);
-          console.log(`  ✓ Deleted: ${filePath}`);
-        } catch (err) {
-          console.log(`  ✗ Failed to delete: ${filePath} - ${err.message}`);
-        }
-      } else if (filePath) {
-        console.log(`  - Skipped (default file): ${filePath}`);
-      }
-    });
-    
     if (code !== 0) {
       console.log('=== RENDER FAILED ===');
       return res.status(500).json({ success: false, logs });
@@ -158,7 +143,7 @@ app.listen(PORT, () => {
   console.log(`📅 Timestamp: ${new Date().toISOString()}`);
   console.log(`🌐 URL: http://localhost:${PORT}`);
   console.log(`📁 Upload directory: ${uploadDest}`);
-  console.log(`📁 Output directory: ${path.join(__dirname, 'outputs')}`);
+  console.log(`📁 Output directory: ${path.join(__dirname, 'public', 'outputs')}`);
   console.log(`📄 TypeScript script: ${path.join(__dirname, 'src', 'main.ts')}`);
   console.log('='.repeat(50));
 }); 

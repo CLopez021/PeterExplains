@@ -15,48 +15,45 @@ import {
 import { WHISPER_PATH, WHISPER_VERSION, WHISPER_MODEL, WHISPER_LANG } from '../whisper-config.mjs';
 
 async function moveFilesToUploads(audioFile: string, stewieImage: string, peterImage: string, backgroundVideo: string) {
-  // Create uploads directory if it doesn't exist
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+  const publicDir = path.join(process.cwd(), 'public');
+  const uploadsDir = path.join(publicDir, 'uploads');
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
-  // Copy files to uploads folder for Remotion staticFile API
-  console.log('Copying files to uploads folder...');
+  console.log('Preparing files for Remotion staticFile API...');
   const timestamp = Date.now();
-  
-  // Copy audio file
-  const audioExt = path.extname(audioFile);
-  const audioFileName = `audio_${timestamp}${audioExt}`;
-  const audioUploadPath = path.join(uploadsDir, audioFileName);
-  fs.copyFileSync(audioFile, audioUploadPath);
-  console.log(`Audio copied: ${audioFile} -> uploads/${audioFileName}`);
-  
-  // Copy stewie image
-  const stewieExt = path.extname(stewieImage);
-  const stewieFileName = `stewie_${timestamp}${stewieExt}`;
-  const stewieUploadPath = path.join(uploadsDir, stewieFileName);
-  fs.copyFileSync(stewieImage, stewieUploadPath);
-  console.log(`Stewie image copied: ${stewieImage} -> uploads/${stewieFileName}`);
-  
-  // Copy peter image
-  const peterExt = path.extname(peterImage);
-  const peterFileName = `peter_${timestamp}${peterExt}`;
-  const peterUploadPath = path.join(uploadsDir, peterFileName);
-  fs.copyFileSync(peterImage, peterUploadPath);
-  console.log(`Peter image copied: ${peterImage} -> uploads/${peterFileName}`);
-  
-  // Copy background video
-  const bgExt = path.extname(backgroundVideo);
-  const bgFileName = `bg_${timestamp}${bgExt}`;
-  const bgUploadPath = path.join(uploadsDir, bgFileName);
-  fs.copyFileSync(backgroundVideo, bgUploadPath);
-  console.log(`Background video copied: ${backgroundVideo} -> uploads/${bgFileName}`);
 
-  // Use relative paths for Remotion staticFile API
-  const audioFileForRemotion = `uploads/${audioFileName}`;
-  const stewieImageForRemotion = `uploads/${stewieFileName}`;
-  const peterImageForRemotion = `uploads/${peterFileName}`;
-  const backgroundVideoForRemotion = `uploads/${bgFileName}`;
+  function processFile(inputPath: string, prefix: string) {
+    const absInput = path.isAbsolute(inputPath)
+      ? inputPath
+      : path.join(process.cwd(), inputPath);
+    if (absInput.startsWith(publicDir + path.sep)) {
+      const relPath = path
+        .relative(publicDir, absInput)
+        .split(path.sep)
+        .join('/');
+      console.log(`${prefix} already in public directory, using ${relPath}`);
+      return { uploadPath: absInput, fileForRemotion: relPath };
+    } else {
+      const ext = path.extname(inputPath);
+      const fileName = `${prefix}_${timestamp}${ext}`;
+      const dst = path.join(uploadsDir, fileName);
+      fs.copyFileSync(absInput, dst);
+      console.log(`${prefix} copied: ${absInput} -> uploads/${fileName}`);
+      return { uploadPath: dst, fileForRemotion: `uploads/${fileName}` };
+    }
+  }
+
+  const { uploadPath: audioUploadPath, fileForRemotion: audioFileForRemotion } =
+    processFile(audioFile, 'Audio');
+  const { uploadPath: stewieUploadPath, fileForRemotion: stewieImageForRemotion } =
+    processFile(stewieImage, 'Stewie image');
+  const { uploadPath: peterUploadPath, fileForRemotion: peterImageForRemotion } =
+    processFile(peterImage, 'Peter image');
+  const { uploadPath: bgUploadPath, fileForRemotion: backgroundVideoForRemotion } =
+    backgroundVideo
+      ? processFile(backgroundVideo, 'Background video')
+      : { uploadPath: '', fileForRemotion: '' };
 
   return {
     audioUploadPath,
@@ -66,7 +63,7 @@ async function moveFilesToUploads(audioFile: string, stewieImage: string, peterI
     audioFileForRemotion,
     stewieImageForRemotion,
     peterImageForRemotion,
-    backgroundVideoForRemotion
+    backgroundVideoForRemotion,
   };
 }
 
@@ -189,14 +186,21 @@ async function main() {
 
   // Clean up files from uploads folder
   console.log('Cleaning up uploads folder...');
-  try {
-    fs.unlinkSync(audioUploadPath);
-    fs.unlinkSync(stewieUploadPath);
-    fs.unlinkSync(peterUploadPath);
-    fs.unlinkSync(bgUploadPath);
-    console.log('All upload files cleaned up successfully');
-  } catch (err) {
-    console.warn(`Failed to clean up upload files: ${err}`);
+  const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+  const uploadPaths = [audioUploadPath, stewieUploadPath, peterUploadPath, bgUploadPath];
+  const copiedPaths = uploadPaths.filter(p => p && p.startsWith(uploadsDir));
+  if (copiedPaths.length) {
+    console.log('Cleaning up copied upload files...');
+    copiedPaths.forEach(fp => {
+      try {
+        fs.unlinkSync(fp);
+        console.log(`Deleted ${fp}`);
+      } catch (err) {
+        console.warn(`Failed to delete ${fp}: ${err}`);
+      }
+    });
+  } else {
+    console.log('No copied upload files to clean up');
   }
 }
 
