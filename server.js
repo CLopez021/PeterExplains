@@ -83,6 +83,10 @@ app.post('/render', upload.fields([
   if (backgroundVideoPath) {
     args.push(backgroundVideoPath);
   }
+  // Include segment definitions JSON if provided
+  if (req.body.segmentsJson) {
+    args.push(req.body.segmentsJson);
+  }
 
   // Use node with ts-node ESM loader to execute TypeScript
   const scriptPath = path.join(__dirname, 'src', 'main.ts');

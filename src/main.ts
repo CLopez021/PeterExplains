@@ -13,6 +13,8 @@ import {
 } from '@remotion/install-whisper-cpp';
 // @ts-expect-error no type declarations for whisper-config.mjs
 import { WHISPER_PATH, WHISPER_VERSION, WHISPER_MODEL, WHISPER_LANG } from '../whisper-config.mjs';
+import { createSegments } from './SegmentCreator';
+import { getImages, type ImageSearchResult } from './ImageSearch';
 
 async function moveFilesToUploads(audioFile: string, stewieImage: string, peterImage: string, backgroundVideo: string) {
   const publicDir = path.join(process.cwd(), 'public');
@@ -33,27 +35,27 @@ async function moveFilesToUploads(audioFile: string, stewieImage: string, peterI
         .split(path.sep)
         .join('/');
       console.log(`${prefix} already in public directory, using ${relPath}`);
-      return { uploadPath: absInput, fileForRemotion: relPath };
+      return { uploadPath: absInput, fileForRemotion: relPath, wasCopied: false };
     } else {
       const ext = path.extname(inputPath);
       const fileName = `${prefix}_${timestamp}${ext}`;
       const dst = path.join(uploadsDir, fileName);
       fs.copyFileSync(absInput, dst);
       console.log(`${prefix} copied: ${absInput} -> uploads/${fileName}`);
-      return { uploadPath: dst, fileForRemotion: `uploads/${fileName}` };
+      return { uploadPath: dst, fileForRemotion: `uploads/${fileName}`, wasCopied: true };
     }
   }
 
-  const { uploadPath: audioUploadPath, fileForRemotion: audioFileForRemotion } =
+  const { uploadPath: audioUploadPath, fileForRemotion: audioFileForRemotion, wasCopied: audioWasCopied } =
     processFile(audioFile, 'Audio');
-  const { uploadPath: stewieUploadPath, fileForRemotion: stewieImageForRemotion } =
+  const { uploadPath: stewieUploadPath, fileForRemotion: stewieImageForRemotion, wasCopied: stewieWasCopied } =
     processFile(stewieImage, 'Stewie image');
-  const { uploadPath: peterUploadPath, fileForRemotion: peterImageForRemotion } =
+  const { uploadPath: peterUploadPath, fileForRemotion: peterImageForRemotion, wasCopied: peterWasCopied } =
     processFile(peterImage, 'Peter image');
-  const { uploadPath: bgUploadPath, fileForRemotion: backgroundVideoForRemotion } =
+  const { uploadPath: bgUploadPath, fileForRemotion: backgroundVideoForRemotion, wasCopied: bgWasCopied } =
     backgroundVideo
       ? processFile(backgroundVideo, 'Background video')
-      : { uploadPath: '', fileForRemotion: '' };
+      : { uploadPath: '', fileForRemotion: '', wasCopied: false };
 
   return {
     audioUploadPath,
@@ -64,6 +66,10 @@ async function moveFilesToUploads(audioFile: string, stewieImage: string, peterI
     stewieImageForRemotion,
     peterImageForRemotion,
     backgroundVideoForRemotion,
+    audioWasCopied,
+    stewieWasCopied,
+    peterWasCopied,
+    bgWasCopied,
   };
 }
 
@@ -71,8 +77,8 @@ async function moveFilesToUploads(audioFile: string, stewieImage: string, peterI
 async function main() {
   console.log('Starting main script...');
   const args = process.argv.slice(2);
-  if (args.length < 4) {
-    console.error('Usage: main.ts <audioFile> <outputVideo> <stewieImage> <peterImage> [backgroundVideo]');
+  if (args.length < 5) {
+    console.error('Usage: main.ts <audioFile> <outputVideo> <stewieImage> <peterImage> [backgroundVideo] [segmentDefsJson]');
     process.exit(1);
   }
   const [
@@ -81,10 +87,11 @@ async function main() {
     stewieImage,
     peterImage,
     backgroundVideo,
+    segmentDefsJson,
   ] = args;
-  console.log('Arguments received:', { audioFile, outputVideo, stewieImage, peterImage, backgroundVideo });
+  console.log('Arguments received:', { audioFile, outputVideo, stewieImage, peterImage, backgroundVideo, segmentDefsJson });
 
-  const { audioUploadPath, stewieUploadPath, peterUploadPath, bgUploadPath, audioFileForRemotion, stewieImageForRemotion, peterImageForRemotion, backgroundVideoForRemotion } = await moveFilesToUploads(audioFile, stewieImage, peterImage, backgroundVideo);
+  const { audioUploadPath, stewieUploadPath, peterUploadPath, bgUploadPath, audioFileForRemotion, stewieImageForRemotion, peterImageForRemotion, backgroundVideoForRemotion, audioWasCopied, stewieWasCopied, peterWasCopied, bgWasCopied } = await moveFilesToUploads(audioFile, stewieImage, peterImage, backgroundVideo);
   // Install whisper.cpp and download the model
   console.log('Installing whisper.cpp...');
   await installWhisperCpp({ to: WHISPER_PATH, version: WHISPER_VERSION });
@@ -104,7 +111,7 @@ async function main() {
     const conversion = spawnSync(
       'npx',
       ['remotion', 'ffmpeg', '-i', audioUploadPath, '-ar', '16000', convertedWav, '-y'],
-      { stdio: 'inherit' }
+      // { stdio: 'inherit' }
     );
     if (conversion.error) {
       console.error('Error converting audio file:', conversion.error);
@@ -134,29 +141,49 @@ async function main() {
   // console.log(`whisperOutput: ${JSON.stringify(whisperOutput.transcription)}`);
   // console.log(`whisperOutput: ${JSON.stringify(whisperOutput)["result"]["transcription"]}`);
   const { captions } = toCaptions({ whisperCppOutput: whisperOutput });
-  console.log('Captions generated.');
-  // Preprocess segments around END_WORD in captions using a simple loop
-  const END_WORD = 'fart';
-  const segments = [];
-  let segmentStart = 0;
-  const videoEndMs = captions[captions.length - 1]?.endMs ?? 0;
-  for (let i = 0; i < captions.length; i++) {
-    if (captions[i].text.toLowerCase() === END_WORD) {
-      const prevEnd = captions[i - 1]?.endMs ?? 0;
-      segments.push({ startMs: segmentStart, endMs: prevEnd });
-      segmentStart = captions[i + 1]?.startMs ?? captions[i]?.endMs ?? prevEnd;
+  // console.log('Full captions data:');
+  // console.log(JSON.stringify(captions, null, 2));
+  // Create segments using JSON definitions and fallback logic
+  let segmentDefs: { speaker: string; text: string }[] = [];
+  if (typeof segmentDefsJson === 'string') {
+    try {
+      segmentDefs = JSON.parse(segmentDefsJson);
+    } catch (err) {
+      console.error('Invalid segments JSON:', err);
+      process.exit(1);
     }
   }
-  // Push final segment
-  segments.push({ startMs: segmentStart, endMs: videoEndMs });
-  // Fart captions - use the relative paths for Remotion staticFile API
+  // console.log('Segment definitions:', segmentDefs);
+  const segments = createSegments(captions, segmentDefs);
+  console.log('Segments:', JSON.stringify(segments, null, 2));
+  
+  // Extract transcript for image search
+  let imageSearchResults: ImageSearchResult[] = [];
+  try {
+    console.log('Extracting transcript for image search...');
+    // Create a transcript string with millisecond timestamps
+    const transcript = captions
+      .map(caption => `${caption.startMs}ms ${caption.text}`)
+      .join(' ');
+    
+    console.log('Searching for images...');
+    imageSearchResults = await getImages(transcript);
+    console.log('Image search completed. Found', imageSearchResults.length, 'image results.');
+  } catch (err) {
+    console.warn('Image search failed, continuing without images:', err instanceof Error ? err.message : String(err));
+    imageSearchResults = [];
+  }
+  
+  console.log('Image search results:', imageSearchResults);
+  // Prepare props for Remotion staticFile API
   const props = { 
     src: audioFileForRemotion, 
     captions, 
     segments, 
     stewieImage: stewieImageForRemotion, 
     peterImage: peterImageForRemotion, 
-    backgroundVideo: backgroundVideoForRemotion 
+    backgroundVideo: backgroundVideoForRemotion, 
+    images: imageSearchResults, 
   };
   console.log('Prepared props for Remotion.');
 
@@ -184,19 +211,23 @@ async function main() {
     }
   }
 
-  // Clean up files from uploads folder
-  console.log('Cleaning up uploads folder...');
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-  const uploadPaths = [audioUploadPath, stewieUploadPath, peterUploadPath, bgUploadPath];
-  const copiedPaths = uploadPaths.filter(p => p && p.startsWith(uploadsDir));
-  if (copiedPaths.length) {
+  // Clean up files from uploads folder (only files that were actually copied)
+  console.log('Cleaning up copied files...');
+  const filesToCleanup = [
+    { path: audioUploadPath, wasCopied: audioWasCopied },
+    { path: stewieUploadPath, wasCopied: stewieWasCopied },
+    { path: peterUploadPath, wasCopied: peterWasCopied },
+    { path: bgUploadPath, wasCopied: bgWasCopied }
+  ].filter(file => file.path && file.wasCopied);
+  
+  if (filesToCleanup.length) {
     console.log('Cleaning up copied upload files...');
-    copiedPaths.forEach(fp => {
+    filesToCleanup.forEach(file => {
       try {
-        fs.unlinkSync(fp);
-        console.log(`Deleted ${fp}`);
+        fs.unlinkSync(file.path);
+        console.log(`Deleted ${file.path}`);
       } catch (err) {
-        console.warn(`Failed to delete ${fp}: ${err}`);
+        console.warn(`Failed to delete ${file.path}: ${err}`);
       }
     });
   } else {

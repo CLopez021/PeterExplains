@@ -1,9 +1,8 @@
 import https from "https";
 import { URL } from "url";
-
 /**
  * The Generate() function is assumed to be defined elsewhere in your code base.
- * It wraps node‑llama‑cpp (or any other LLM runtime) and returns the model's
+ * It wraps node-llama-cpp (or any other LLM runtime) and returns the model's
  * raw string response.
  */
 import { generate } from "./LLMGeneration"; // adjust the relative path as needed
@@ -13,11 +12,11 @@ import { generate } from "./LLMGeneration"; // adjust the relative path as neede
  */
 export interface ImageSearch {
   /**
-   * Timestamp in seconds where the image should first appear.
+   * Timestamp in milliseconds where the image should first appear.
    */
   start: number;
   /**
-   * (Optional) Timestamp in seconds when the image should disappear.
+   * (Optional) Timestamp in milliseconds when the image should disappear.
    * Omit or set to null if the image may persist until the next cue.
    */
   end?: number | null;
@@ -34,20 +33,41 @@ export interface ImageSearch {
  */
 function buildPrompt(transcript: string): string {
   return [
-    "You are an expert video-illustration assistant.",
-    "Given a spoken-word transcript that includes word-level timestamps (e.g. \"00:10:23 Mothman …\"), decide which moments should be illustrated with a still image.",
-    "Rules:",
-    "1. Group words into 10-second blocks (0-10 s, 10-20 s, …).",
-    "2. Pick **up to two** high-salience nouns or named entities (proper nouns, places, events, mythological creatures, conspiracy terms) from *each* block.",
-    "   • Ignore fillers, verbs, pronouns.",
-    "   • Prefer rarer terms: e.g. 'Mothman', 'Freemasons', 'Roswell UFO crash'.",
-    "3. Turn each chosen term into a concise search phrase suitable for an image API (max 5 words).",
-    "4. Return an array of objects with this exact JSON schema (no markdown):",
-    "   [{ \"start\": <seconds>, \"end\": <seconds|null>, \"query\": <string> }, …]",
-    "   • start = beginning of the 10-second block (integer).",
-    "   • end   = end of the block (start+10) or null if unknown.",
-    "5. Do NOT include any other keys, comments, or text outside the JSON.",
-    "\nTRANSCRIPT:\n" + transcript.trim(),
+"You are an expert video‑illustration assistant.",
+"Given a spoken‑word transcript with word‑level millisecond timestamps",
+"(e.g. “10230ms Mothman …”), choose moments where a still image would",
+"meaningfully illustrate what is being discussed.",
+
+"Goals",
+"• Frequent coverage: aim for one image every ~5000ms.",
+"• Relevance: focus on salient nouns, named entities, and high-salience terms.",
+"• Searchability: write queries 1-4 words long; avoid over-specific",
+"  details (e.g. “Loch Ness Monster” good, “grainy 1934 Nessie photo” bad).",
+"• Brevity: omit filler words (“the”, “an”, “of”, etc.) in queries.",
+
+"Rules",
+"1. Parse all “<number>ms <word>” tokens.",
+"2. Build contiguous spans so that",
+"   • span duration >= 3000ms and <= 5000ms, and",
+"   • any gap between successive spans <= 1000ms.",
+"   (If a final snippet would be <3000ms, merge it with the previous span.)",
+"3. Each span's query should summarize the most salient concept(s)",
+"   **within that span**; if no new salient term appears, reuse the last one.",
+"4. Stop once you have covered the entire transcript.",
+"5. Output JSON **array only** (no prose, markdown, or extra keys) matching:",
+"   [{ \"start\": <ms>, \"end\": <ms|null>, \"query\": <string> }, …]",
+
+"Examples",
+"INPUT  ▶  \"0ms Bitcoin … 4000ms in 2010 … 9000ms Satoshi Nakamoto …\"",
+"OUTPUT ▶  [{\"start\":0,\"end\":5000,\"query\":\"Bitcoin logo\"},",
+"           {\"start\":5000,\"end\":10000,\"query\":\"Satoshi Nakamoto\"}]",
+"",
+"INPUT  ▶  \"0ms The Loch Ness Monster … 5000ms many skeptics …\"",
+"OUTPUT ▶  [{\"start\":0,\"end\":8000,\"query\":\"Loch Ness Monster\"}]",
+"",
+"TRANSCRIPT:",
+    transcript.trim(),
+    "",
   ].join("\n");
 }
 
@@ -76,9 +96,9 @@ export async function getImageSearchTerms(transcript: string): Promise<ImageSear
   }
 }
 
-// Result type: only start, end, and image_url
+// Result type: only start, end, and image_url (all times in milliseconds)
 export interface ImageSearchResult {
-  start: number;
+  start: number | null;
   end: number | null;
   image_url: string | null;
 }
@@ -91,38 +111,43 @@ export async function getImages(transcript: string): Promise<ImageSearchResult[]
   const apiKey = process.env.GOOGLE_API_KEY;
   const cx = process.env.SEARCH_ENGINE_ID;
   if (!apiKey || !cx) {
-    throw new Error("Missing GOOGLE_API_KEY or SEARCH_ENGINE_ID environment variables");
+    console.warn("Missing GOOGLE_API_KEY or SEARCH_ENGINE_ID environment variables, skipping image fetch.");
+    return terms.map(() => ({ start: null, end: null, image_url: null }));
   }
   const baseUrl = "https://www.googleapis.com/customsearch/v1";
-  return Promise.all(
+  const results = await Promise.all(
     terms.map(async (term) => {
       const url = new URL(baseUrl);
       url.searchParams.append("key", apiKey);
       url.searchParams.append("cx", cx);
       url.searchParams.append("searchType", "image");
       url.searchParams.append("q", term.query);
-
-      const data = await new Promise<{ items?: { link?: string }[] }>((resolve, reject) => {
-        https.get(url, (res) => {
-          let body = "";
-          res.on("data", (chunk) => (body += chunk));
-          res.on("end", () => {
-            if (res.statusCode && res.statusCode >= 400) {
-              return reject(new Error(`Google Image Search API error: ${res.statusCode} ${res.statusMessage}`));
-            }
-            try {
-              resolve(JSON.parse(body) as { items?: { link?: string }[] });
-            } catch (err) {
-              reject(err);
-            }
-          });
-        }).on("error", reject);
-      });
-
-      const image_url = data.items?.[0]?.link ?? null;
-      return { start: term.start, end: term.end ?? null, image_url };
+      try {
+        const data = await new Promise<{ items?: { link?: string }[] }>((resolve, reject) => {
+          https.get(url, (res) => {
+            let body = "";
+            res.on("data", (chunk) => (body += chunk));
+            res.on("end", () => {
+              if (res.statusCode && res.statusCode >= 400) {
+                return reject(new Error(`Google Image Search API error: ${res.statusCode} ${res.statusMessage}`));
+              }
+              try {
+                resolve(JSON.parse(body) as { items?: { link?: string }[] });
+              } catch (err) {
+                reject(err);
+              }
+            });
+          }).on("error", reject);
+        });
+        const image_url = data.items?.[0]?.link ?? null;
+        return { start: term.start, end: term.end ?? null, image_url };
+      } catch (err) {
+        console.warn(`Image search failed for query "${term.query}", setting start/end to null: ${err instanceof Error ? err.message : String(err)}`);
+        return { start: null, end: null, image_url: null };
+      }
     })
   );
+  return results;
 }
 
 

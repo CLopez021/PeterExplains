@@ -9,10 +9,12 @@ import {
 } from "remotion";
 import { z } from "zod";
 import {parseMedia} from '@remotion/media-parser';
+import { getImageDimensions } from '@remotion/media-utils';
 import { Caption } from "@remotion/captions";
 import CaptionOverlay, { SWITCH_CAPTIONS_EVERY_MS } from "./CaptionOverlay";
 import { staticFile } from "remotion";
 import CharacterOverlay from '../CharacterOverlay';
+import ImageOverlay from '../ImageOverlay';
 import { useMemo } from "react";
 import { msToFrames } from "../utils";
 
@@ -36,6 +38,15 @@ export const captionedVideoSchema = z.object({
   stewieImage: z.string(),
   peterImage: z.string(),
   backgroundVideo: z.string(),
+  images: z.array(
+    z.object({
+      start: z.number(),
+      end: z.number().nullable(),
+      image_url: z.string().nullable(),
+      w: z.number().nullable().optional(),
+      h: z.number().nullable().optional(),
+    })
+  ),
 });
 
 export const calculateCaptionedVideoMetadata: CalculateMetadataFunction<
@@ -49,10 +60,35 @@ export const calculateCaptionedVideoMetadata: CalculateMetadataFunction<
     fields: { durationInSeconds: true },
   });
 
+  const stewieImageMetadata = await getImageDimensions(staticFile(props.stewieImage));
+  const peterImageMetadata = await getImageDimensions(staticFile(props.peterImage));
+
+  // Fetch dimensions for each search result image
+  const imagesWithMeta = await Promise.all(
+    props.images.map(async (img) => {
+      if (!img.image_url) {
+        return { ...img, w: null, h: null };
+      }
+      try {
+        const dims = await getImageDimensions(img.image_url);
+        return { ...img, w: dims.width, h: dims.height };
+      } catch (err) {
+        console.warn(`Failed to get dimensions for image URL "${img.image_url}": ${err instanceof Error ? err.message : String(err)}`);
+        return { ...img, w: null, h: null };
+      }
+    })
+  );
+
   return {
     fps,
     durationInFrames: Math.floor((metadata.durationInSeconds ?? 0) * fps),
-    props: { ...props, backgroundVideoDurationMs: (backgroundVideoMetadata.durationInSeconds ?? 0) * 1000 },
+    props: {
+      ...props,
+      images: imagesWithMeta,
+      backgroundVideoDurationMs: (backgroundVideoMetadata.durationInSeconds ?? 0) * 1000,
+      stewieImageMetadata,
+      peterImageMetadata,
+    },
   };
 };
 
@@ -63,8 +99,11 @@ export const CaptionedVideo: React.FC<{
   stewieImage: string;
   peterImage: string;
   backgroundVideo: string;
+  images: { start: number; end: number | null; image_url: string | null; w?: number | null; h?: number | null }[];
   backgroundVideoDurationMs: number;
-}> = ({ src, captions, segments, stewieImage, peterImage, backgroundVideo, backgroundVideoDurationMs }) => {
+  stewieImageMetadata: { width: number; height: number };
+  peterImageMetadata: { width: number; height: number };
+}> = ({ src, captions, segments, stewieImage, peterImage, backgroundVideo, images, backgroundVideoDurationMs, stewieImageMetadata, peterImageMetadata }) => {
   const { fps } = useVideoConfig();
 
 	const { videoStartFrame, videoEndFrame } = useMemo(() => {
@@ -104,7 +143,7 @@ export const CaptionedVideo: React.FC<{
           from={fromFrame}
           durationInFrames={durationInFrames}
         >
-          <CharacterOverlay src={staticFile(charSrc)} side={side} />
+          <CharacterOverlay src={staticFile(charSrc)} side={side} stewieImageMetadata={stewieImageMetadata} peterImageMetadata={peterImageMetadata} />
         </Sequence>,
       );
 
@@ -120,10 +159,27 @@ export const CaptionedVideo: React.FC<{
     return { characterSequences, audioSequences };
   }, [segments, fps, stewieImage, peterImage, src]);
 
+  const imageSequences = useMemo(() => {
+    return images
+      .filter((img) => img.image_url && img.w != null && img.h != null)
+      .map((img, idx) => {
+        const fromFrame = msToFrames(img.start, fps);
+        const durationMs = img.end != null ? img.end - img.start : 5000;
+        const durationInFrames = msToFrames(durationMs, fps);
+
+        return (
+          <Sequence key={`image-${idx}`} from={fromFrame} durationInFrames={durationInFrames}>
+            <ImageOverlay src={img.image_url!} meta={{ w: img.w!, h: img.h! }} />
+          </Sequence>
+        );
+      });
+  }, [images, fps]);
+
   return (
     <AbsoluteFill style={{ backgroundColor: "white" }}>
       <AbsoluteFill>
         <OffthreadVideo
+          muted
           style={{
             width: '100%',
             height: '100%',
@@ -135,6 +191,7 @@ export const CaptionedVideo: React.FC<{
           trimAfter={videoEndFrame}
         />
       </AbsoluteFill>
+      {imageSequences}
       {characterSequences}
       <CaptionOverlay
         audioFile={staticFile(src)}
