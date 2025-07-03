@@ -192,7 +192,7 @@ async function main() {
   const result = spawnSync(
     'npx',
     ['remotion', 'render', 'remotion_src/index.ts', 'CaptionedVideo', outputVideo, '--props', JSON.stringify(props)],
-    { stdio: 'inherit' },
+    // { stdio: 'inherit' },
   );
   if (result.error) {
     console.error('Error during rendering:', result.error);

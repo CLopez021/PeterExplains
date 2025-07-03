@@ -13,11 +13,9 @@ import { TikTokPage } from "@remotion/captions";
 const fontFamily = TheBoldFont;
 
 const container: React.CSSProperties = {
+  display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  top: undefined,
-  bottom: 350,
-  height: 150,
 };
 
 const DESIRED_FONT_SIZE = 120;
