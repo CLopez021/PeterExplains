@@ -7,7 +7,8 @@
     "build": "remotion bundle",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc",
-    "start": "node server.js"
+    "start": "node server.js",
+    "start:verbose": "VERBOSE=true node server.js"
   },
   "repository": {},
   "license": "UNLICENSED",

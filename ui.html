@@ -293,6 +293,19 @@
     </div>
 
     <div class="section">
+      <h2>Image Search Options</h2>
+      <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="enableImageSearch" style="transform: scale(1.2);" checked>
+          <span style="font-size: 1rem; color: #e8e8e8;">Enable automatic image search and overlay</span>
+        </label>
+        <p style="margin-top: 8px; color: rgba(255,255,255,0.6); font-size: 0.9rem;">
+          When enabled, the system will automatically search for relevant images based on the transcript and overlay them on the video.
+        </p>
+      </div>
+    </div>
+
+    <div class="section">
       <h2>Segment Definitions (JSON)</h2>
       <textarea id="segmentsJsonInput" rows="6" placeholder='[{"speaker":"Stewie","text":"Example line"}]'
         style="width:100%; background:rgba(255,255,255,0.05); color:#e8e8e8; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; font-family:monospace; margin-top:10px;">
@@ -401,6 +414,10 @@
       if (segmentsJsonInputEl && segmentsJsonInputEl.value) {
         formData.append('segmentsJson', segmentsJsonInputEl.value);
       }
+
+      // Image search toggle
+      const enableImageSearchEl = document.getElementById('enableImageSearch');
+      formData.append('enableImageSearch', enableImageSearchEl.checked ? 'true' : 'false');
 
       // Add timeout message for longer render times
       const timeoutId = setTimeout(() => {

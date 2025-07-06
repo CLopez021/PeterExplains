@@ -13,3 +13,5 @@ public/uploads/
 public/outputs/
 prompt/
 *.mp4
+!examples/example.mp4
+plans/
