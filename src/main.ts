@@ -16,13 +16,22 @@ import { WHISPER_PATH, WHISPER_VERSION, WHISPER_MODEL, WHISPER_LANG } from '../w
 import { createSegments } from './SegmentCreator';
 import { getImages, type ImageSearchResult } from './ImageSearch';
 
+const VERBOSE = process.env.VERBOSE === 'true';
+
+// Utility function for verbose logging
+const log = (...args: unknown[]) => {
+  if (VERBOSE) {
+    console.log(...args);
+  }
+};
+
 async function moveFilesToUploads(audioFile: string, stewieImage: string, peterImage: string, backgroundVideo: string) {
   const publicDir = path.join(process.cwd(), 'public');
   const uploadsDir = path.join(publicDir, 'uploads');
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
-  console.log('Preparing files for Remotion staticFile API...');
+  log('Preparing files for Remotion staticFile API...');
   const timestamp = Date.now();
 
   function processFile(inputPath: string, prefix: string) {
@@ -34,14 +43,14 @@ async function moveFilesToUploads(audioFile: string, stewieImage: string, peterI
         .relative(publicDir, absInput)
         .split(path.sep)
         .join('/');
-      console.log(`${prefix} already in public directory, using ${relPath}`);
+      log(`${prefix} already in public directory, using ${relPath}`);
       return { uploadPath: absInput, fileForRemotion: relPath, wasCopied: false };
     } else {
       const ext = path.extname(inputPath);
       const fileName = `${prefix}_${timestamp}${ext}`;
       const dst = path.join(uploadsDir, fileName);
       fs.copyFileSync(absInput, dst);
-      console.log(`${prefix} copied: ${absInput} -> uploads/${fileName}`);
+      log(`${prefix} copied: ${absInput} -> uploads/${fileName}`);
       return { uploadPath: dst, fileForRemotion: `uploads/${fileName}`, wasCopied: true };
     }
   }
@@ -75,10 +84,10 @@ async function moveFilesToUploads(audioFile: string, stewieImage: string, peterI
 
 
 async function main() {
-  console.log('Starting main script...');
+  log('Starting main script...');
   const args = process.argv.slice(2);
   if (args.length < 5) {
-    console.error('Usage: main.ts <audioFile> <outputVideo> <stewieImage> <peterImage> [backgroundVideo] [segmentDefsJson]');
+    console.error('Usage: main.ts <audioFile> <outputVideo> <stewieImage> <peterImage> [backgroundVideo] [segmentDefsJson] [enableImageSearch]');
     process.exit(1);
   }
   const [
@@ -88,30 +97,34 @@ async function main() {
     peterImage,
     backgroundVideo,
     segmentDefsJson,
+    enableImageSearchArg,
   ] = args;
-  console.log('Arguments received:', { audioFile, outputVideo, stewieImage, peterImage, backgroundVideo, segmentDefsJson });
+  
+  // Parse the enableImageSearch parameter
+  const enableImageSearch = enableImageSearchArg === 'true';
+  log('Arguments received:', { audioFile, outputVideo, stewieImage, peterImage, backgroundVideo, segmentDefsJson, enableImageSearch });
 
   const { audioUploadPath, stewieUploadPath, peterUploadPath, bgUploadPath, audioFileForRemotion, stewieImageForRemotion, peterImageForRemotion, backgroundVideoForRemotion, audioWasCopied, stewieWasCopied, peterWasCopied, bgWasCopied } = await moveFilesToUploads(audioFile, stewieImage, peterImage, backgroundVideo);
+  
   // Install whisper.cpp and download the model
-  console.log('Installing whisper.cpp...');
+  log('Installing whisper.cpp...');
   await installWhisperCpp({ to: WHISPER_PATH, version: WHISPER_VERSION });
-  console.log('Downloading whisper model...');
+  log('Downloading whisper model...');
   await downloadWhisperModel({ folder: WHISPER_PATH, model: WHISPER_MODEL });
 
   let tempDir;
   // Use the copied audio file for whisper transcription
-  console.log(`Using audio file for transcription: ${audioUploadPath}`);
+  log(`Using audio file for transcription: ${audioUploadPath}`);
 
   // Ensure audio is 16kHz WAV for whisper
   let inputForWhisper = audioUploadPath;
   if (!audioUploadPath.toLowerCase().endsWith('.wav')) {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'transcribe-'));    
     const convertedWav = path.join(tempDir, path.basename(audioUploadPath, path.extname(audioUploadPath)) + '.wav');
-    console.log(`Converting ${audioUploadPath} to 16KHz WAV: ${convertedWav}`);
+    log(`Converting ${audioUploadPath} to 16KHz WAV: ${convertedWav}`);
     const conversion = spawnSync(
       'npx',
       ['remotion', 'ffmpeg', '-i', audioUploadPath, '-ar', '16000', convertedWav, '-y'],
-      // { stdio: 'inherit' }
     );
     if (conversion.error) {
       console.error('Error converting audio file:', conversion.error);
@@ -125,7 +138,7 @@ async function main() {
   }
 
   // Transcribe audio
-  console.log(`Transcribing ${inputForWhisper}`);
+  log(`Transcribing ${inputForWhisper}`);
   const whisperOutput = await transcribe({
     inputPath: inputForWhisper,
     model: WHISPER_MODEL,
@@ -137,12 +150,9 @@ async function main() {
     language: WHISPER_LANG,
     splitOnWord: true,
   });
-  console.log('Transcription complete.');
-  // console.log(`whisperOutput: ${JSON.stringify(whisperOutput.transcription)}`);
-  // console.log(`whisperOutput: ${JSON.stringify(whisperOutput)["result"]["transcription"]}`);
+  log('Transcription complete.');
   const { captions } = toCaptions({ whisperCppOutput: whisperOutput });
-  // console.log('Full captions data:');
-  // console.log(JSON.stringify(captions, null, 2));
+  
   // Create segments using JSON definitions and fallback logic
   let segmentDefs: { speaker: string; text: string }[] = [];
   if (typeof segmentDefsJson === 'string') {
@@ -153,28 +163,32 @@ async function main() {
       process.exit(1);
     }
   }
-  // console.log('Segment definitions:', segmentDefs);
   const segments = createSegments(captions, segmentDefs);
-  console.log('Segments:', JSON.stringify(segments, null, 2));
   
-  // Extract transcript for image search
+  // Extract transcript for image search (if enabled)
   let imageSearchResults: ImageSearchResult[] = [];
-  try {
-    console.log('Extracting transcript for image search...');
-    // Create a transcript string with millisecond timestamps
-    const transcript = captions
-      .map(caption => `${caption.startMs}ms ${caption.text}`)
-      .join(' ');
-    
-    console.log('Searching for images...');
-    imageSearchResults = await getImages(transcript);
-    console.log('Image search completed. Found', imageSearchResults.length, 'image results.');
-  } catch (err) {
-    console.warn('Image search failed, continuing without images:', err instanceof Error ? err.message : String(err));
+  if (enableImageSearch) {
+    try {
+      log('Extracting transcript for image search...');
+      // Create a transcript string with millisecond timestamps
+      const transcript = captions
+        .map(caption => `${caption.startMs}ms ${caption.text}`)
+        .join(' ');
+      
+      log('Searching for images...');
+      imageSearchResults = await getImages(transcript);
+      log('Image search completed. Found', imageSearchResults.length, 'image results.');
+    } catch (err) {
+      console.warn('Image search failed, continuing without images:', err instanceof Error ? err.message : String(err));
+      imageSearchResults = [];
+    }
+  } else {
+    log('Image search disabled, skipping...');
     imageSearchResults = [];
   }
   
-  console.log('Image search results:', imageSearchResults);
+  log('Image search results:', imageSearchResults);
+  
   // Prepare props for Remotion staticFile API
   const props = { 
     src: audioFileForRemotion, 
@@ -185,34 +199,33 @@ async function main() {
     backgroundVideo: backgroundVideoForRemotion, 
     images: imageSearchResults, 
   };
-  console.log('Prepared props for Remotion.');
 
   // Render video using remotion CLI
-  console.log(`Rendering video to ${outputVideo}...`);
+  console.log('🎬 Rendering video...');
   const result = spawnSync(
     'npx',
     ['remotion', 'render', 'remotion_src/index.ts', 'CaptionedVideo', outputVideo, '--props', JSON.stringify(props)],
-    // { stdio: 'inherit' },
+    { stdio: 'inherit' },
   );
   if (result.error) {
     console.error('Error during rendering:', result.error);
     process.exit(1);
   }
-  console.log('Video rendering finished.');
+  console.log('✅ Video rendering finished.');
 
   // Clean up temporary whisper files
   if (inputForWhisper !== audioUploadPath && tempDir) {
     try {
       fs.unlinkSync(inputForWhisper);
       fs.rmdirSync(tempDir);
-      console.log(`Cleaned up temporary files in ${tempDir}`);
+      log(`Cleaned up temporary files in ${tempDir}`);
     } catch (err) {
       console.warn(`Failed to clean up temporary files: ${err}`);
     }
   }
 
   // Clean up files from uploads folder (only files that were actually copied)
-  console.log('Cleaning up copied files...');
+  log('Cleaning up copied files...');
   const filesToCleanup = [
     { path: audioUploadPath, wasCopied: audioWasCopied },
     { path: stewieUploadPath, wasCopied: stewieWasCopied },
@@ -221,22 +234,21 @@ async function main() {
   ].filter(file => file.path && file.wasCopied);
   
   if (filesToCleanup.length) {
-    console.log('Cleaning up copied upload files...');
+    log('Cleaning up copied upload files...');
     filesToCleanup.forEach(file => {
       try {
         fs.unlinkSync(file.path);
-        console.log(`Deleted ${file.path}`);
+        log(`Deleted ${file.path}`);
       } catch (err) {
         console.warn(`Failed to delete ${file.path}: ${err}`);
       }
     });
   } else {
-    console.log('No copied upload files to clean up');
+    log('No copied upload files to clean up');
   }
 }
 
 main().catch((err) => {
   console.error(err);
   process.exit(1);
-});
-console.log('Main script finished.'); 
+}); 

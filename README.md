@@ -1,96 +1,148 @@
-# Remotion video
+# PeterExplains Video Creator
 
-<p align="center">
-  <a href="https://github.com/remotion-dev/logo">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-dark.gif">
-      <img alt="Animated Remotion Logo" src="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-light.gif">
-    </picture>
-  </a>
-</p>
+Create engaging "Peter Explains" style videos with automated dialogue generation, voice synthesis, and video rendering.
 
-Welcome to your Remotion project!
+## Example Output
+
+Check out `examples/example.mp4` to see what the final video looks like!
+
+## Prerequisites & Setup
+
+### 1. ElevenLabs Voice Setup (Required)
+
+Create Peter and Stewie voices using ElevenLabs:
+
+**Peter Griffin Voice:**
+- Go to [ElevenLabs](https://elevenlabs.io) and create an account
+- Use audio samples from: https://youtu.be/Ey8JT7M9sIs?si=RbJ82QBkUBkOMjUk
+- Create a new voice clone for Peter using these samples
+
+**Stewie Griffin Voice:**
+- Use audio samples from: https://www.myinstants.com/en/search/?name=stewie
+- Create a new voice clone for Stewie using these samples
+
+### 2. Image Search Setup (Optional)
+
+⚠️ **Only set this up if you want images automatically added to your videos**
+
+If you want to skip images, simply toggle off the image search in the UI and you won't need any API keys or environment variables.
+
+**Setup Instructions (only if you want images):**
+1. **OpenRouter Account:**
+   - Sign up for a free account at [OpenRouter](https://openrouter.ai)
+   - Get your API key from the dashboard
+   - This will be used for free LLM access to generate image search queries
+
+2. **Google Cloud Image Search:**
+   - Create/Select a Google Cloud project (enable billing if required)
+   - Enable the **Custom Search API** in Cloud Console under **APIs & Services ▶ Library**
+   - Create an **API key** in **APIs & Services ▶ Credentials**
+   - Create a Custom Search Engine at https://cse.google.com/cse/, enable **Image search**
+   - Note: Provides 100 free image searches per day
+
+3. **Environment Configuration:**
+   - Copy `.env-example` to `.env` and fill in your API keys:
+   ```env
+   OPENROUTER_API_KEY=your_openrouter_api_key_here
+   LLM_MODEL=deepseek/deepseek-r1:free
+   GOOGLE_API_KEY=your_google_api_key_here
+   SEARCH_ENGINE_ID=your_search_engine_id_here
+   ```
+
+## Installation
+
+```bash
+npm install
+```
+
+## Creating a Video
+
+### Step 1: Generate Dialogue with ChatGPT
+
+1. Go to [ChatGPT](https://chatgpt.com)
+2. **Strongly recommended:** Use the **o3 model** for best results
+3. Use the prompt from `examples/example_prompt.md`
+4. Replace the `TOPIC:` section with your desired video topic
+5. Submit the prompt and copy the JSON output
+
+**Example Output:**
+Based on the example prompt, you might get something like:
+
+```json
+[
+  {
+    "speaker": "Stewie",
+    "text": "Peter, why do people think we never actually landed on the moon?"
+  },
+  {
+    "speaker": "Peter",
+    "text": "Oh that's easy, Stewie! So basically some people think the whole Apollo moon landing was filmed on a movie set. They point to things like the American flag waving when there's no wind on the moon, or how the shadows look weird in the photos. But here's the thing - there's actually tons of evidence we really did go, like the reflectors we left up there that scientists still bounce lasers off of today!"
+  },
+  {
+    "speaker": "Stewie",
+    "text": "But what about those suspicious shadows and the waving flag?"
+  },
+  {
+    "speaker": "Peter",
+    "text": "Great question! The flag looks like it's waving because it had a horizontal rod holding it up - otherwise it would just hang limp in the vacuum. And those weird shadows? They're actually caused by the uneven lunar surface and multiple light sources. Plus, we've got thousands of photos, hours of video, and 842 pounds of moon rocks that hundreds of scientists have studied. It would've been harder to fake it with 1960s technology than to actually do it!"
+  }
+]
+```
+
+### Step 2: Create Audio with ElevenLabs
+
+1. Go to [ElevenLabs](https://elevenlabs.io)
+2. Navigate to the **Speech Synthesis** section
+3. Select **v3** (important for quality)
+4. For each section in your JSON:
+   - **Stewie sections:** Use your Stewie voice clone
+   - **Peter sections:** Use your Peter voice clone
+5. Paste each text section separately and generate audio
+6. Download the combined audio file
+
+### Step 3: Render Video
+
+1. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+2. Open the UI in your browser
+
+3. Input your content:
+   - **JSON Output:** Paste the JSON from ChatGPT
+   - **Audio File:** Upload the audio file from ElevenLabs
+   - **Images (Optional):** Toggle on/off based on your preference
+
+4. Click the **Render** button
+
+5. Your video will be generated and saved to the outputs folder
 
 ## Commands
 
-**Install Dependencies**
-
-```console
-npm i
-```
-
-**Start Preview**
-
-```console
+**Start Development Server:**
+```bash
 npm run dev
 ```
 
-**Render video**
-
-```console
+**Render Video:**
+```bash
 npx remotion render
 ```
 
-**Upgrade Remotion**
+## Tips
 
-```console
-npx remotion upgrade
-```
+- **Use the o3 model** in ChatGPT for the best dialogue quality
+- Make sure your ElevenLabs voices are well-trained with clear audio samples
+- If you don't need images, toggle off the image search to speed up rendering
+- The entire process typically takes 5-10 minutes depending on video length
 
-## Captioning
+## Troubleshooting
 
-Replace the `sample-video.mp4` with your video file.
-Caption all the videos in you `public` by running the following command:
-
-```console
-node sub.mjs
-```
-
-Only caption a specific video:
-
-```console
-node sub.mjs <path-to-video-file>
-```
-
-Only caption a specific folder:
-
-```console
-node sub.mjs <path-to-folder>
-```
-
-## Configure Whisper.cpp
-
-Captioning will download Whisper.cpp and the 1.5GB big `medium.en` model. To configure which model is being used, you can configure the variables in `whisper-config.mjs`.
-
-### Non-English languages
-
-To support non-English languages, you need to change the `WHISPER_MODEL` variable in `whisper-config.mjs` to a model that does not have a `.en` sufix.
-
-## Docs
-
-Get started with Remotion by reading the [fundamentals page](https://www.remotion.dev/docs/the-fundamentals).
-
-## Help
-
-We provide help on our [Discord server](https://remotion.dev/discord).
-
-## Issues
-
-Found an issue with Remotion? [File an issue here](https://github.com/remotion-dev/remotion/issues/new).
-
-## Google Custom Search Image API
-
-1. Create/Select a Google Cloud project (enable billing if required).
-2. Enable the **Custom Search API** in Cloud Console under **APIs & Services ▶ Library**.
-3. Create an **API key** in **APIs & Services ▶ Credentials** and set `GOOGLE_API_KEY` in your environment.
-4. Create a Custom Search Engine at https://cse.google.com/cse/, enable **Image search**, and set `SEARCH_ENGINE_ID` in your environment.
-
-### Example .env
-
-```env
-GOOGLE_API_KEY=YOUR_API_KEY
-SEARCH_ENGINE_ID=YOUR_SEARCH_ENGINE_ID
-```
+- **Missing API keys:** Make sure your `.env` file is properly configured
+- **Poor voice quality:** Try using more/better audio samples for voice cloning
+- **Slow rendering:** Disable image search if you don't need it
+- **ChatGPT not following format:** Make sure you're using the exact prompt from `examples/example_prompt.md`
 
 ## License
 

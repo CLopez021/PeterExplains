@@ -9,7 +9,7 @@ type CharacterOverlayProps = {
   peterImageMetadata: { width: number; height: number };
 };
 
-const heightPlacement = 0.75;
+const heightPlacement = 0.50;
 
 const CharacterOverlay: React.FC<CharacterOverlayProps> = ({ src, side, stewieImageMetadata, peterImageMetadata }) => {
   const frame = useCurrentFrame();
@@ -27,13 +27,16 @@ const CharacterOverlay: React.FC<CharacterOverlayProps> = ({ src, side, stewieIm
 
   const metadata = side === 'Left' ? stewieImageMetadata : peterImageMetadata;
   const aspectRatio = metadata.width / metadata.height;
-  const finalWidth = width * 0.6;
-  const finalHeight = finalWidth / aspectRatio;
-  const defaultTop = height * heightPlacement;
-  let topPosition = defaultTop;
-  if(defaultTop + finalHeight > height) {
-    topPosition = height - finalHeight;
-  }
+  
+  // Calculate available height from placement position to bottom
+  const availableHeight = height * (1 - heightPlacement);
+  
+  // Scale character to fit within available height while maintaining aspect ratio
+  const finalHeight = availableHeight;
+  const finalWidth = finalHeight * aspectRatio;
+  
+  // Position at the placement height
+  const topPosition = height * heightPlacement;
   const margin = width * 0.05;
   const initialX = side === 'Left' ? -finalWidth : width + finalWidth;
   const finalX = side === 'Left' ? margin : width - finalWidth - margin;

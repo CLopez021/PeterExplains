@@ -49,6 +49,7 @@ function buildPrompt(transcript: string): string {
 "• Context/theme descriptor: If the transcript centers on a clear overall topic (e.g. Bigfoot, quantum computing), incorporate that theme word into queries where it adds clarity (e.g. 'Bigfoot footprint' instead of just 'footprint'). Avoid redundancy if the theme is already obvious in the noun.",
 "• Specificity over generic: avoid single common words; always pair the core noun with at least one descriptive modifier.",
 "• EXTREMELY IMPORTANT: never use generic words like 'picture', 'image', 'thing', or 'object'. Each query must include at least one concrete descriptor (e.g. 'golden retriever dog' not 'dog').",
+"• Avoid ending spans exactly when a new topic is introduced; ensure the topic term is fully within the image segment (e.g. extend at least 500ms after mention).",
 
 "Rules",
 "1. Parse all '<number>ms <word>' tokens.",
@@ -99,6 +100,7 @@ function buildReviewPrompt(transcript: string, draftJson: string): string {
     "🚨🚨🚨 **ABSOLUTELY NO GENERIC TERMS** — reject or fix any span whose query contains generic terms. Every query must include at least one concrete descriptor.",
     "• Queries must be 1-4 words, specific, topic-aligned.",
     "• Maintain ~3–5 s span durations with ≤ 1 s gaps; merge if needed.",
+    "• Avoid ending spans exactly when a new topic is introduced; ensure the topic term is fully within the image segment (e.g. extend at least 500ms after mention).",
     "• Ensure coverage continues until the end of the transcript.",
     "• Ensure theme alignment: Where helpful, prepend/append the overarching topic (e.g. 'Bigfoot', 'quantum') to make the query more specific without becoming verbose.",
     "If any problems exist, output a *corrected* JSON array that fully satisfies the rules;",

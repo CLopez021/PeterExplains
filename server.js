@@ -6,6 +6,7 @@ import path from 'path';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +16,29 @@ const uploadDest = path.join(__dirname, 'public', 'uploads');
 const upload = multer({ dest: uploadDest });
 const PORT = process.env.PORT || 3000;
 
+// Function to open browser automatically
+const openBrowser = (url) => {
+  const platform = process.platform;
+  let command;
+  
+  switch (platform) {
+    case 'darwin': // macOS
+      command = `open "${url}"`;
+      break;
+    case 'win32': // Windows
+      command = `start "${url}"`;
+      break;
+    default: // Linux and others
+      command = `xdg-open "${url}"`;
+      break;
+  }
+  
+  exec(command, (error) => {
+    if (error) {
+      console.error(`Failed to open browser: ${error}`);
+    }
+  });
+};
 
 // Ensure uploads and outputs directories exist
 [uploadDest, path.join(__dirname, 'public', 'outputs')].forEach((dir) => {
@@ -87,6 +111,10 @@ app.post('/render', upload.fields([
   if (req.body.segmentsJson) {
     args.push(req.body.segmentsJson);
   }
+  
+  // Include image search toggle
+  const enableImageSearch = req.body.enableImageSearch === 'true';
+  args.push(enableImageSearch.toString());
 
   // Use node with ts-node ESM loader to execute TypeScript
   const scriptPath = path.join(__dirname, 'src', 'main.ts');
@@ -102,7 +130,7 @@ app.post('/render', upload.fields([
     ...args
   ], {
     stdio: ['inherit', 'pipe', 'pipe'],
-    env: { ...process.env, TS_NODE_ESM: '1' }
+    env: { ...process.env, TS_NODE_ESM: '1', VERBOSE: process.env.VERBOSE || 'false' }
   });
 
   let logs = '';
@@ -150,4 +178,9 @@ app.listen(PORT, () => {
   console.log(`📁 Output directory: ${path.join(__dirname, 'public', 'outputs')}`);
   console.log(`📄 TypeScript script: ${path.join(__dirname, 'src', 'main.ts')}`);
   console.log('='.repeat(50));
+  
+  // Automatically open browser
+  setTimeout(() => {
+    openBrowser(`http://localhost:${PORT}`);
+  }, 1000);
 }); 
